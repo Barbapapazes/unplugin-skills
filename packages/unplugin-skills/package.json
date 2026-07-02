@@ -1,0 +1,53 @@
+{
+  "name": "unplugin-skills",
+  "type": "module",
+  "version": "0.0.0",
+  "author": "Estéban Soubiran <esteban@soubiran.dev>",
+  "license": "MIT",
+  "funding": "https://github.com/sponsors/Barbapapazes",
+  "homepage": "https://github.com/Barbapapazes/unplugin-skills/tree/main/packages/unplugin-skills#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Barbapapazes/unplugin-skills/tree/main/packages/unplugin-skills"
+  },
+  "bugs": "https://github.com/Barbapapazes/unplugin-skills/issues",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./types": {
+      "types": "./dist/types.d.mts",
+      "import": "./dist/types.mjs"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.mts",
+      "import": "./dist/vite.mjs"
+    }
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "vite": "^8.0.0"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "picocolors": "^1.1.1",
+    "unplugin": "^3.3.0"
+  },
+  "devDependencies": {
+    "@tsconfig/node24": "^24.0.4",
+    "@types/node": "^24.13.2",
+    "tsdown": "^0.22.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.1",
+    "vitest": "^4.0.7"
+  }
+}

@@ -1,0 +1,12 @@
+shellEmulator: true
+
+trustPolicy: off
+
+packages:
+  - 'packages/*'
+  - '.playgrounds/*'
+
+allowBuilds:
+  '@parcel/watcher': false
+  esbuild: false
+  unrs-resolver: false

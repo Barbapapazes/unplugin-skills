@@ -1,0 +1,1 @@
+You are a fake skill used only for local playground verification.

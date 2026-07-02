@@ -1,0 +1,25 @@
+{
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "build": "pnpm -r --filter './packages/**' run build",
+    "deps:update": "taze",
+    "knip": "knip",
+    "knip:production": "knip --production",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "release": "bumpp",
+    "test": "pnpm run build && pnpm -r --filter './packages/**' run test"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.1.0",
+    "@tsconfig/node24": "^24.0.4",
+    "@types/node": "^24.13.2",
+    "bumpp": "^11.1.0",
+    "eslint": "^10.5.0",
+    "knip": "^6.23.0",
+    "taze": "^19.14.1",
+    "typescript": "^6.0.3"
+  }
+}

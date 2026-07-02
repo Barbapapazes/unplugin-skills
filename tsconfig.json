@@ -1,0 +1,13 @@
+{
+  "extends": "@tsconfig/node24/tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "taze.config.ts",
+    "eslint.config.ts",
+    "bump.config.ts"
+  ]
+}
