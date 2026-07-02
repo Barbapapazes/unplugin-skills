@@ -32,4 +32,5 @@ jobs:
       - run: npm install -g npm@latest
       - name: Prepare Nuxt module
         run: pnpm --dir packages/nuxt-skills exec nuxt prepare
+      - run: pnpm run build
       - run: pnpm publish -r --access public --no-git-checks
