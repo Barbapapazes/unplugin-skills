@@ -10,7 +10,8 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "release": "bumpp",
-    "test": "pnpm run build && pnpm -r --filter './packages/**' run test"
+    "test": "pnpm run build && pnpm -r --filter './packages/**' run test",
+    "typecheck": "pnpm -r --filter './packages/**' run test:types"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.1.0",

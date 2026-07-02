@@ -1,7 +1,7 @@
 import type { Logger } from 'vite'
 import { Buffer } from 'node:buffer'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { get } from 'node:http'
+import { request as createHttpRequest } from 'node:http'
 import { dirname, join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { build, createServer } from 'vite'
@@ -20,7 +20,11 @@ describe('unplugin-skills', () => {
     const root = await createFixture({
       'skills/alpha-skill/SKILL.md': ['---', 'name: alpha-skill', 'description: Alpha skill', '---', '', 'Alpha'].join('\n'),
       'skills/alpha-skill/.hidden.txt': 'shh',
+      'skills/alpha-skill/.hidden/secret.txt': 'shh',
+      'skills/alpha-skill/.nuxt/secret.txt': 'shh',
+      'skills/alpha-skill/dist/secret.txt': 'shh',
       'skills/alpha-skill/nested/guide.txt': 'hello',
+      'skills/alpha-skill/node_modules/secret.txt': 'shh',
       'skills/bad--skill/SKILL.md': ['---', 'name: bad--skill', 'description: Invalid', '---'].join('\n'),
       'skills/mismatch-name/SKILL.md': ['---', 'name: another-name', 'description: Invalid', '---'].join('\n'),
       'skills/missing-description/SKILL.md': ['---', 'name: missing-description', '---'].join('\n'),
@@ -85,7 +89,12 @@ describe('unplugin-skills', () => {
       expect(baseUrl).toBeTruthy()
 
       const indexResponse = await request(baseUrl, '/.well-known/skills/index.json')
+      const indexHeadResponse = await request(baseUrl, '/.well-known/skills/index.json', 'HEAD')
       const fileResponse = await request(baseUrl, '/.well-known/skills/alpha-skill/prompts/guide.txt')
+      const fileHeadResponse = await request(baseUrl, '/.well-known/skills/alpha-skill/prompts/guide.txt', 'HEAD')
+      const hiddenFileResponse = await request(baseUrl, '/.well-known/skills/alpha-skill/.hidden.txt')
+      const missingFileResponse = await request(baseUrl, '/.well-known/skills/alpha-skill/missing.txt')
+      const methodResponse = await request(baseUrl, '/.well-known/skills/index.json', 'POST')
       const traversalResponse = await request(baseUrl, '/.well-known/skills/%2E%2E/secret.txt')
 
       expect(indexResponse.statusCode).toBe(200)
@@ -100,11 +109,21 @@ describe('unplugin-skills', () => {
           },
         ],
       })
+      expect(indexHeadResponse.statusCode).toBe(200)
+      expect(indexHeadResponse.headers['content-type']).toContain('application/json')
+      expect(indexHeadResponse.body).toBe('')
 
       expect(fileResponse.statusCode).toBe(200)
       expect(fileResponse.headers['content-type']).toContain('text/plain')
       expect(fileResponse.body).toBe('Follow the alpha guide')
+      expect(fileHeadResponse.statusCode).toBe(200)
+      expect(fileHeadResponse.headers['content-type']).toContain('text/plain')
+      expect(fileHeadResponse.body).toBe('')
 
+      expect(hiddenFileResponse.statusCode).toBe(404)
+      expect(missingFileResponse.statusCode).toBe(404)
+      expect(methodResponse.statusCode).toBe(405)
+      expect(methodResponse.headers.allow).toBe('GET, HEAD')
       expect(traversalResponse.statusCode).toBe(400)
     }
     finally {
@@ -212,12 +231,13 @@ function createTestLogger(logs: string[]): Logger {
   }
 }
 
-async function request(baseUrl: string, path: string): Promise<{ statusCode: number, headers: Record<string, string>, body: string }> {
+async function request(baseUrl: string, path: string, method = 'GET'): Promise<{ statusCode: number, headers: Record<string, string>, body: string }> {
   const url = new URL(baseUrl)
 
   return new Promise((resolve, reject) => {
-    const requestHandle = get({
+    const requestHandle = createHttpRequest({
       hostname: url.hostname,
+      method,
       path,
       port: url.port,
       protocol: url.protocol,
@@ -234,5 +254,6 @@ async function request(baseUrl: string, path: string): Promise<{ statusCode: num
     })
 
     requestHandle.on('error', reject)
+    requestHandle.end()
   })
 }

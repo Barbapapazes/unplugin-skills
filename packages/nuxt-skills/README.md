@@ -29,7 +29,7 @@ export default defineNuxtConfig({
 
 ## Options
 
-Options are passed to `unplugin-skills/vite`.
+Options use the same shape as `unplugin-skills`; the Nuxt module scans the skills directory, registers Nitro server assets, and exposes the `.well-known` routes through server handlers.
 
 ```ts
 export default defineNuxtConfig({

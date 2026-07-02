@@ -1,11 +1,12 @@
 import type { SkillEntry } from '../types.js'
-import { existsSync } from 'node:fs'
-import { readdir, readFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { access, readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import matter from 'gray-matter'
 
 const SKILL_NAME_REGEX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 const MAX_NAME_LENGTH = 64
+const IGNORED_DIRECTORY_NAMES = new Set(['node_modules', 'dist', '.git', '.cache', '.nuxt', '.output'])
 
 interface SkillFrontmatter {
   name?: string
@@ -13,7 +14,7 @@ interface SkillFrontmatter {
 }
 
 export async function scanSkills(skillsDir: string, warn: (message: string) => void = () => {}): Promise<SkillEntry[]> {
-  if (!existsSync(skillsDir))
+  if (!await pathExists(skillsDir))
     return []
 
   const catalog: SkillEntry[] = []
@@ -26,7 +27,7 @@ export async function scanSkills(skillsDir: string, warn: (message: string) => v
     const skillDir = join(skillsDir, entry.name)
     const skillMdPath = join(skillDir, 'SKILL.md')
 
-    if (!existsSync(skillMdPath))
+    if (!await pathExists(skillMdPath))
       continue
 
     const content = await readFile(skillMdPath, 'utf8')
@@ -41,9 +42,7 @@ export async function scanSkills(skillsDir: string, warn: (message: string) => v
     if (!validateSkillName(name, entry.name, warn))
       continue
 
-    const allFiles = await listFilesRecursively(skillDir)
-    const visibleFiles = allFiles
-      .filter(file => !file.split('/').some(segment => segment.startsWith('.')))
+    const visibleFiles = (await listFilesRecursively(skillDir))
       .sort((left, right) => left.localeCompare(right))
 
     const files = ['SKILL.md', ...visibleFiles.filter(file => file !== 'SKILL.md')]
@@ -56,6 +55,16 @@ export async function scanSkills(skillsDir: string, warn: (message: string) => v
   }
 
   return catalog
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath, constants.F_OK)
+    return true
+  }
+  catch {
+    return false
+  }
 }
 
 function parseFrontmatter(content: string): SkillFrontmatter | null {
@@ -101,9 +110,15 @@ async function listFilesRecursively(dir: string, base = ''): Promise<string[]> {
     const relativePath = base ? `${base}/${entry.name}` : entry.name
 
     if (entry.isDirectory()) {
+      if (entry.name.startsWith('.') || IGNORED_DIRECTORY_NAMES.has(entry.name))
+        continue
+
       files.push(...await listFilesRecursively(join(dir, entry.name), relativePath))
       continue
     }
+
+    if (entry.name.startsWith('.'))
+      continue
 
     files.push(relativePath)
   }

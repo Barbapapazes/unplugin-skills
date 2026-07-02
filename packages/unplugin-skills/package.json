@@ -8,7 +8,8 @@
   "homepage": "https://github.com/Barbapapazes/unplugin-skills/tree/main/packages/unplugin-skills#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Barbapapazes/unplugin-skills/tree/main/packages/unplugin-skills"
+    "url": "git+https://github.com/Barbapapazes/unplugin-skills.git",
+    "directory": "packages/unplugin-skills"
   },
   "bugs": "https://github.com/Barbapapazes/unplugin-skills/issues",
   "exports": {
@@ -32,10 +33,16 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:types": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
     "vite": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "dependencies": {
     "gray-matter": "^4.0.3",

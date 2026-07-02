@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ResolvedConfig, ViteDevServer } from 'vite'
 import type { ResolvedSkillsPluginOptions, SkillEntry, SkillsIndexPayload, SkillsPluginOptions } from './types.js'
 import { readFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import colors from 'picocolors'
 import { createUnplugin } from 'unplugin'
@@ -24,10 +24,23 @@ function isPathTraversal(filePath: string): boolean {
   return filePath.split('/').includes('..')
 }
 
-function sendJson(response: ServerResponse, payload: SkillsIndexPayload): void {
+function isHeadRequest(request: IncomingMessage): boolean {
+  return request.method === 'HEAD'
+}
+
+function isReadRequest(request: IncomingMessage): boolean {
+  return request.method === 'GET' || isHeadRequest(request)
+}
+
+function sendJson(request: IncomingMessage, response: ServerResponse, payload: SkillsIndexPayload): void {
   response.statusCode = 200
   response.setHeader('content-type', 'application/json; charset=utf-8')
   response.setHeader('cache-control', CACHE_CONTROL_VALUE)
+  if (isHeadRequest(request)) {
+    response.end()
+    return
+  }
+
   response.end(`${JSON.stringify(payload, null, 2)}\n`)
 }
 
@@ -35,6 +48,18 @@ function sendText(response: ServerResponse, statusCode: number, message: string)
   response.statusCode = statusCode
   response.setHeader('content-type', 'text/plain; charset=utf-8')
   response.end(message)
+}
+
+function sendMethodNotAllowed(response: ServerResponse): void {
+  response.statusCode = 405
+  response.setHeader('allow', 'GET, HEAD')
+  response.setHeader('content-type', 'text/plain; charset=utf-8')
+  response.end('Method Not Allowed')
+}
+
+function isInsideDirectory(directory: string, filePath: string): boolean {
+  const relativePath = relative(directory, filePath)
+  return relativePath === '' || (!relativePath.startsWith('..') && !relativePath.startsWith('/'))
 }
 
 async function getCatalog(skillsRoot: string, warn: (message: string) => void): Promise<SkillsIndexPayload> {
@@ -105,53 +130,76 @@ export const unplugin = createUnplugin<SkillsPluginOptions | undefined>((userOpt
       },
       configureServer(server: ViteDevServer) {
         const printUrls = server.printUrls.bind(server)
+        const skillsRoot = resolve(root, options.dir)
+        let catalogCache: SkillsIndexPayload | undefined
+
+        async function getDevCatalog(): Promise<SkillsIndexPayload> {
+          catalogCache ||= await getCatalog(skillsRoot, message => server.config.logger.warn(`[unplugin-skills] ${message}`))
+          return catalogCache
+        }
+
+        server.watcher.add(skillsRoot)
+        server.watcher.on('all', (_event, filePath) => {
+          if (isInsideDirectory(skillsRoot, filePath))
+            catalogCache = undefined
+        })
+
         server.printUrls = () => {
           printUrls()
           printCatalogEndpoint(server)
         }
 
         server.middlewares.use(async (request: IncomingMessage, response: ServerResponse, next: (err?: unknown) => void) => {
-          const requestPath = getRequestPath(request)
-          if (requestPath !== INDEX_ROUTE && !requestPath.startsWith(FILES_ROUTE_PREFIX))
-            return next()
-
-          const skillsRoot = resolve(root, options.dir)
-          const catalog = await getCatalog(skillsRoot, message => server.config.logger.warn(`[unplugin-skills] ${message}`))
-
-          if (requestPath === INDEX_ROUTE) {
-            sendJson(response, catalog)
-            return
-          }
-
-          let relativePath = ''
-
           try {
-            relativePath = decodeURIComponent(requestPath.slice(FILES_ROUTE_PREFIX.length))
-          }
-          catch {
-            sendText(response, 400, 'Bad Request')
-            return
-          }
+            const requestPath = getRequestPath(request)
+            if (requestPath !== INDEX_ROUTE && !requestPath.startsWith(FILES_ROUTE_PREFIX))
+              return next()
 
-          if (!relativePath || isPathTraversal(relativePath)) {
-            sendText(response, 400, 'Bad Request')
-            return
+            if (!isReadRequest(request)) {
+              sendMethodNotAllowed(response)
+              return
+            }
+
+            const catalog = await getDevCatalog()
+
+            if (requestPath === INDEX_ROUTE) {
+              sendJson(request, response, catalog)
+              return
+            }
+
+            let relativePath = ''
+
+            try {
+              relativePath = decodeURIComponent(requestPath.slice(FILES_ROUTE_PREFIX.length))
+            }
+            catch {
+              sendText(response, 400, 'Bad Request')
+              return
+            }
+
+            if (!relativePath || isPathTraversal(relativePath)) {
+              sendText(response, 400, 'Bad Request')
+              return
+            }
+
+            const [skillName, ...rest] = relativePath.split('/')
+            const fileName = rest.join('/')
+            const skill = findSkill(catalog.skills, skillName || '')
+
+            if (!skill || !fileName || !skill.files.includes(fileName)) {
+              sendText(response, 404, 'Not Found')
+              return
+            }
+
+            const source = await readFile(join(skillsRoot, skill.name, fileName))
+            response.statusCode = 200
+            response.setHeader('content-type', getContentType(fileName))
+            response.setHeader('cache-control', CACHE_CONTROL_VALUE)
+            response.end(isHeadRequest(request) ? undefined : source)
           }
-
-          const [skillName, ...rest] = relativePath.split('/')
-          const fileName = rest.join('/')
-          const skill = findSkill(catalog.skills, skillName || '')
-
-          if (!skill || !fileName || !skill.files.includes(fileName)) {
-            sendText(response, 404, 'Not Found')
-            return
+          catch (error) {
+            next(error)
           }
-
-          const source = await readFile(join(skillsRoot, skill.name, fileName))
-          response.statusCode = 200
-          response.setHeader('content-type', getContentType(fileName))
-          response.setHeader('cache-control', CACHE_CONTROL_VALUE)
-          response.end(source)
         })
       },
     },
