@@ -24,6 +24,10 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - name: Prepare Nuxt module and playground
+        run: |
+          pnpm --dir packages/nuxt-skills exec nuxt prepare
+          pnpm --dir .playgrounds/nuxt exec nuxt prepare
       - run: pnpm run build
 
   lint:
@@ -63,6 +67,10 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - name: Prepare Nuxt module and playground
+        run: |
+          pnpm --dir packages/nuxt-skills exec nuxt prepare
+          pnpm --dir .playgrounds/nuxt exec nuxt prepare
       - run: pnpm run test
 
   typecheck:
@@ -76,6 +84,10 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - name: Prepare Nuxt module and playground
+        run: |
+          pnpm --dir packages/nuxt-skills exec nuxt prepare
+          pnpm --dir .playgrounds/nuxt exec nuxt prepare
       - run: pnpm run typecheck
 
   continuous-release:
@@ -89,5 +101,9 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - name: Prepare Nuxt module and playground
+        run: |
+          pnpm --dir packages/nuxt-skills exec nuxt prepare
+          pnpm --dir .playgrounds/nuxt exec nuxt prepare
       - run: pnpm run build
       - run: pnpm dlx pkg-pr-new publish './packages/*'
