@@ -54,6 +54,11 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - name: Prepare Nuxt module
+        run: pnpm --dir packages/nuxt-skills exec nuxt prepare
+      - run: pnpm run build
+      - name: Prepare Nuxt playground
+        run: pnpm --dir .playgrounds/nuxt exec nuxt prepare
       - run: pnpm run knip
 
   test:
@@ -87,6 +92,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Prepare Nuxt module
         run: pnpm --dir packages/nuxt-skills exec nuxt prepare
+      - run: pnpm run build
       - run: pnpm run typecheck
 
   continuous-release:

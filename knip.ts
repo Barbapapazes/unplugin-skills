@@ -1,6 +1,7 @@
 import type { KnipConfig } from 'knip'
 
 export default {
+  ignoreBinaries: ['nuxt'],
   ignoreIssues: {
     'packages/unplugin-skills/src/index.ts': ['duplicates'],
     'packages/unplugin-skills/src/vite.ts': ['duplicates'],
