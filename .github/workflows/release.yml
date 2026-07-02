@@ -30,8 +30,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: npm install -g npm@latest
-      - name: Prepare Nuxt module and playground
-        run: |
-          pnpm --dir packages/nuxt-skills exec nuxt prepare
-          pnpm --dir .playgrounds/nuxt exec nuxt prepare
+      - name: Prepare Nuxt module
+        run: pnpm --dir packages/nuxt-skills exec nuxt prepare
       - run: pnpm publish -r --access public --no-git-checks

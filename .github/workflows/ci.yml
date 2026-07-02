@@ -24,11 +24,11 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - name: Prepare Nuxt module and playground
-        run: |
-          pnpm --dir packages/nuxt-skills exec nuxt prepare
-          pnpm --dir .playgrounds/nuxt exec nuxt prepare
+      - name: Prepare Nuxt module
+        run: pnpm --dir packages/nuxt-skills exec nuxt prepare
       - run: pnpm run build
+      - name: Prepare Nuxt playground
+        run: pnpm --dir .playgrounds/nuxt exec nuxt prepare
 
   lint:
     runs-on: ubuntu-latest
@@ -67,11 +67,12 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - name: Prepare Nuxt module and playground
-        run: |
-          pnpm --dir packages/nuxt-skills exec nuxt prepare
-          pnpm --dir .playgrounds/nuxt exec nuxt prepare
-      - run: pnpm run test
+      - name: Prepare Nuxt module
+        run: pnpm --dir packages/nuxt-skills exec nuxt prepare
+      - run: pnpm run build
+      - name: Prepare Nuxt playground
+        run: pnpm --dir .playgrounds/nuxt exec nuxt prepare
+      - run: pnpm -r --filter './packages/**' run test
 
   typecheck:
     runs-on: ubuntu-latest
@@ -84,10 +85,8 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - name: Prepare Nuxt module and playground
-        run: |
-          pnpm --dir packages/nuxt-skills exec nuxt prepare
-          pnpm --dir .playgrounds/nuxt exec nuxt prepare
+      - name: Prepare Nuxt module
+        run: pnpm --dir packages/nuxt-skills exec nuxt prepare
       - run: pnpm run typecheck
 
   continuous-release:
@@ -101,9 +100,9 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - name: Prepare Nuxt module and playground
-        run: |
-          pnpm --dir packages/nuxt-skills exec nuxt prepare
-          pnpm --dir .playgrounds/nuxt exec nuxt prepare
+      - name: Prepare Nuxt module
+        run: pnpm --dir packages/nuxt-skills exec nuxt prepare
       - run: pnpm run build
+      - name: Prepare Nuxt playground
+        run: pnpm --dir .playgrounds/nuxt exec nuxt prepare
       - run: pnpm dlx pkg-pr-new publish './packages/*'
