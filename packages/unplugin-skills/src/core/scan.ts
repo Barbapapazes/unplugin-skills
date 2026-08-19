@@ -1,11 +1,12 @@
-import type { SkillEntry } from '../types.js'
-import { constants } from 'node:fs'
-import { access, readdir, readFile } from 'node:fs/promises'
+import type { ScannedSkill, ScannedSkillFile } from '../types.js'
+import { open, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import matter from 'gray-matter'
 
 const SKILL_NAME_REGEX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 const MAX_NAME_LENGTH = 64
+const MAX_DESCRIPTION_LENGTH = 1024
+const MAX_TAR_PATH_BYTES = 100
 const IGNORED_DIRECTORY_NAMES = new Set(['node_modules', 'dist', '.git', '.cache', '.nuxt', '.output'])
 
 interface SkillFrontmatter {
@@ -13,58 +14,105 @@ interface SkillFrontmatter {
   description?: string
 }
 
-export async function scanSkills(skillsDir: string, warn: (message: string) => void = () => {}): Promise<SkillEntry[]> {
-  if (!await pathExists(skillsDir))
-    return []
+export async function scanSkills(skillsDir: string, warn: (message: string) => void = () => {}): Promise<ScannedSkill[]> {
+  let entries
+  try {
+    entries = await readdir(skillsDir, { withFileTypes: true })
+  }
+  catch (error) {
+    if (isMissingPathError(error))
+      return []
+    throw error
+  }
 
-  const catalog: SkillEntry[] = []
-  const entries = await readdir(skillsDir, { withFileTypes: true })
+  const skills: ScannedSkill[] = []
 
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+  for (const entry of entries.sort(compareDirectoryEntries)) {
     if (!entry.isDirectory())
       continue
 
-    const skillDir = join(skillsDir, entry.name)
-    const skillMdPath = join(skillDir, 'SKILL.md')
-
-    if (!await pathExists(skillMdPath))
-      continue
-
-    const content = await readFile(skillMdPath, 'utf8')
-    const frontmatter = parseFrontmatter(content)
-
-    if (!frontmatter?.description) {
-      warn(`Skipping skill "${entry.name}": missing description in SKILL.md frontmatter`)
+    let files: ScannedSkillFile[]
+    try {
+      files = await collectFiles(join(skillsDir, entry.name))
+    }
+    catch (error) {
+      warn(`Skipping skill "${entry.name}": ${getErrorMessage(error)}`)
       continue
     }
 
-    const name = frontmatter.name || entry.name
-    if (!validateSkillName(name, entry.name, warn))
+    const skillMd = files.find(file => file.path === 'SKILL.md')
+    if (!skillMd)
       continue
 
-    const visibleFiles = (await listFilesRecursively(skillDir))
-      .sort((left, right) => left.localeCompare(right))
+    const frontmatter = parseFrontmatter(new TextDecoder().decode(skillMd.bytes))
+    if (!frontmatter) {
+      warn(`Skipping skill "${entry.name}": malformed SKILL.md frontmatter`)
+      continue
+    }
 
-    const files = ['SKILL.md', ...visibleFiles.filter(file => file !== 'SKILL.md')]
+    if (!frontmatter.name) {
+      warn(`Skipping skill "${entry.name}": missing name in SKILL.md frontmatter`)
+      continue
+    }
 
-    catalog.push({
-      name,
-      description: frontmatter.description,
+    if (!validateSkillName(frontmatter.name, entry.name, warn))
+      continue
+
+    if (!validateDescription(frontmatter.description, entry.name, warn))
+      continue
+
+    skills.push({
+      name: frontmatter.name,
+      description: frontmatter.description.trim(),
       files,
     })
   }
 
-  return catalog
+  return skills
 }
 
-async function pathExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath, constants.F_OK)
-    return true
+async function collectFiles(directory: string, base = ''): Promise<ScannedSkillFile[]> {
+  const files: ScannedSkillFile[] = []
+  const entries = await readdir(directory, { withFileTypes: true })
+
+  for (const entry of entries.sort(compareDirectoryEntries)) {
+    if (entry.name.startsWith('.'))
+      continue
+
+    const relativePath = base ? `${base}/${entry.name}` : entry.name
+    const sourcePath = join(directory, entry.name)
+
+    if (entry.isSymbolicLink())
+      throw new Error(`unsupported symbolic link "${relativePath}"`)
+
+    if (entry.isDirectory()) {
+      if (IGNORED_DIRECTORY_NAMES.has(entry.name))
+        continue
+
+      files.push(...await collectFiles(sourcePath, relativePath))
+      continue
+    }
+
+    if (!entry.isFile())
+      throw new Error(`unsupported filesystem entry "${relativePath}"`)
+
+    validateArchivePath(relativePath)
+    const handle = await open(sourcePath, 'r')
+    try {
+      const stat = await handle.stat()
+      files.push({
+        path: relativePath,
+        sourcePath,
+        bytes: await handle.readFile(),
+        mode: stat.mode & 0o777,
+      })
+    }
+    finally {
+      await handle.close()
+    }
   }
-  catch {
-    return false
-  }
+
+  return files
 }
 
 function parseFrontmatter(content: string): SkillFrontmatter | null {
@@ -102,26 +150,37 @@ function validateSkillName(name: string, dirName: string, warn: (message: string
   return true
 }
 
-async function listFilesRecursively(dir: string, base = ''): Promise<string[]> {
-  const files: string[] = []
-  const entries = await readdir(dir, { withFileTypes: true })
-
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const relativePath = base ? `${base}/${entry.name}` : entry.name
-
-    if (entry.isDirectory()) {
-      if (entry.name.startsWith('.') || IGNORED_DIRECTORY_NAMES.has(entry.name))
-        continue
-
-      files.push(...await listFilesRecursively(join(dir, entry.name), relativePath))
-      continue
-    }
-
-    if (entry.name.startsWith('.'))
-      continue
-
-    files.push(relativePath)
+function validateDescription(description: string | undefined, skillName: string, warn: (message: string) => void): description is string {
+  if (!description || !description.trim()) {
+    warn(`Skipping skill "${skillName}": missing description in SKILL.md frontmatter`)
+    return false
   }
 
-  return files
+  if (description.length > MAX_DESCRIPTION_LENGTH) {
+    warn(`Skipping skill "${skillName}": description exceeds ${MAX_DESCRIPTION_LENGTH} character limit`)
+    return false
+  }
+
+  return true
+}
+
+function validateArchivePath(filePath: string): void {
+  const segments = filePath.split('/')
+  if (filePath.startsWith('/') || filePath.includes('\\') || segments.some(segment => !segment || segment === '.' || segment === '..'))
+    throw new Error(`unsafe archive path "${filePath}"`)
+
+  if (new TextEncoder().encode(filePath).byteLength > MAX_TAR_PATH_BYTES)
+    throw new Error(`archive path "${filePath}" exceeds ${MAX_TAR_PATH_BYTES} bytes`)
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function compareDirectoryEntries(left: { name: string }, right: { name: string }): number {
+  return left.name < right.name ? -1 : left.name > right.name ? 1 : 0
 }

@@ -1,14 +1,11 @@
-import type { NitroConfig } from 'nitropack'
+import type { Nitro, NitroConfig, PrerenderRoute } from 'nitropack'
 import type { SkillsPluginOptions } from 'unplugin-skills/types'
-import { resolve } from 'node:path'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 import { addPrerenderRoutes, addServerHandler, createResolver, defineNuxtModule } from '@nuxt/kit'
-import { DEFAULT_SKILLS_DIR, INDEX_ROUTE, scanSkills, SERVER_ASSETS_BASE_NAME, SKILLS_ROUTE_PREFIX } from 'unplugin-skills'
+import { buildSkillsArtifactBundle, CACHE_CONTROL_VALUE, DEFAULT_SKILLS_DIR, GENERATED_ASSETS_DIR, INDEX_ROUTE, SERVER_ASSETS_BASE_NAME, SKILLS_ROUTE_PREFIX } from 'unplugin-skills'
 
 export type ModuleOptions = SkillsPluginOptions
-
-interface RuntimeSkillsConfig {
-  catalog: Awaited<ReturnType<typeof scanSkills>>
-}
 
 function resolveOptions(options: ModuleOptions): Required<ModuleOptions> {
   return {
@@ -28,23 +25,43 @@ export default defineNuxtModule<ModuleOptions>({
   async setup(options, nuxt) {
     const resolvedOptions = resolveOptions(options)
     const skillsRoot = resolve(nuxt.options.rootDir, resolvedOptions.dir)
-    const catalog = await scanSkills(skillsRoot, message => console.warn(`[nuxt-skills] ${message}`))
+    const generatedAssetsDir = resolve(nuxt.options.buildDir, GENERATED_ASSETS_DIR)
+    const bundle = await buildSkillsArtifactBundle(skillsRoot, message => console.warn(`[nuxt-skills] ${message}`))
     const { resolve: resolveRuntime } = createResolver(import.meta.url)
 
-    nuxt.options.runtimeConfig.skills = { catalog } satisfies RuntimeSkillsConfig
-
-    const prerenderRoutes = [INDEX_ROUTE]
-    for (const skill of catalog) {
-      for (const fileName of skill.files)
-        prerenderRoutes.push(`${SKILLS_ROUTE_PREFIX}/${skill.name}/${fileName}`)
-    }
-
-    addPrerenderRoutes(prerenderRoutes)
+    addPrerenderRoutes([INDEX_ROUTE, ...bundle.artifacts.map(artifact => artifact.url)])
 
     const onNitroConfig = nuxt.hook as (name: 'nitro:config', cb: (nitroConfig: NitroConfig) => void) => void
     onNitroConfig('nitro:config', (nitroConfig) => {
       nitroConfig.serverAssets ||= []
-      nitroConfig.serverAssets.push({ baseName: SERVER_ASSETS_BASE_NAME, dir: skillsRoot })
+      nitroConfig.serverAssets.push({ baseName: SERVER_ASSETS_BASE_NAME, dir: generatedAssetsDir })
+      nitroConfig.hooks ||= {}
+      const buildHooks = nitroConfig.hooks as unknown as Record<string, ((nitro: Nitro) => void | Promise<void>) | undefined>
+      const previousBuildBeforeHook = buildHooks['build:before']
+      buildHooks['build:before'] = async (nitro) => {
+        await previousBuildBeforeHook?.(nitro)
+        await rm(generatedAssetsDir, { force: true, recursive: true })
+        await mkdir(generatedAssetsDir, { recursive: true })
+        await writeGeneratedAsset(generatedAssetsDir, 'index.json', bundle.indexBytes)
+        await Promise.all(bundle.artifacts.map(artifact => writeGeneratedAsset(generatedAssetsDir, artifact.path, artifact.bytes)))
+      }
+
+      const hooks = nitroConfig.hooks as unknown as Record<string, ((route: PrerenderRoute) => void | Promise<void>) | undefined>
+      const previousPrerenderRouteHook = hooks['prerender:generate']
+      hooks['prerender:generate'] = async (route) => {
+        await previousPrerenderRouteHook?.(route)
+        if (route.route.startsWith(`${SKILLS_ROUTE_PREFIX}/`) && route.route.endsWith('.tar.gz'))
+          route.skip = true
+      }
+      nitroConfig.routeRules ||= {}
+      nitroConfig.routeRules[`${SKILLS_ROUTE_PREFIX}/**`] = {
+        ...nitroConfig.routeRules[`${SKILLS_ROUTE_PREFIX}/**`],
+        headers: {
+          ...nitroConfig.routeRules[`${SKILLS_ROUTE_PREFIX}/**`]?.headers,
+          'access-control-allow-origin': '*',
+          'cache-control': CACHE_CONTROL_VALUE,
+        },
+      }
     })
 
     addServerHandler({
@@ -54,13 +71,13 @@ export default defineNuxtModule<ModuleOptions>({
 
     addServerHandler({
       route: `${SKILLS_ROUTE_PREFIX}/**`,
-      handler: resolveRuntime('./runtime/server/routes/skills-files'),
+      handler: resolveRuntime('./runtime/server/routes/skills-artifacts'),
     })
   },
 })
 
-declare module 'nuxt/schema' {
-  interface RuntimeConfig {
-    skills: RuntimeSkillsConfig
-  }
+async function writeGeneratedAsset(root: string, relativePath: string, bytes: Uint8Array): Promise<void> {
+  const destination = resolve(root, relativePath)
+  await mkdir(dirname(destination), { recursive: true })
+  await writeFile(destination, bytes)
 }
