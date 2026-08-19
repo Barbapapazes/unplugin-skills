@@ -32,6 +32,8 @@
   "scripts": {
     "build": "nuxt-module-build build",
     "prepack": "npm run build",
+    "pretest": "nuxt prepare",
+    "pretest:types": "nuxt prepare",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest watch",
@@ -48,6 +50,7 @@
     "@nuxt/test-utils": "^4.0.3",
     "@types/node": "^24.13.2",
     "eslint": "^10.4.1",
+    "nanotar": "^0.3.0",
     "nuxt": "^4.4.8",
     "typescript": "~6.0.3",
     "vitest": "^4.1.8",

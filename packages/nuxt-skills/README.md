@@ -5,11 +5,11 @@
 [![License][license-src]][license-href]
 [![pkg.pr.new](https://pkg.pr.new/badge/Barbapapazes/unplugin-skills)](https://pkg.pr.new/~/Barbapapazes/unplugin-skills)
 
-Nuxt module for exposing local skills as `.well-known` files.
+Nuxt module for publishing local skills through Agent Skills Discovery RFC 0.2.
 
 - 🔎 Scans a local `skills/` directory
-- ⚡ Serves the skills index and files in dev
-- 📦 Emits the same files during Nuxt builds
+- ⚡ Serves `/.well-known/agent-skills/index.json` and skill artifacts
+- 📦 Packages byte-exact generated artifacts as Nitro server assets
 
 ## Installation
 
@@ -29,7 +29,7 @@ export default defineNuxtConfig({
 
 ## Options
 
-Options use the same shape as `unplugin-skills`; the Nuxt module scans the skills directory, registers Nitro server assets, and exposes the `.well-known` routes through server handlers.
+Options use the same shape as `unplugin-skills`. The module generates the RFC 0.2 index and artifacts during setup, registers them as Nitro server assets, and prerenders discovery routes where Nitro can preserve the artifact representation.
 
 ```ts
 export default defineNuxtConfig({
@@ -40,7 +40,7 @@ export default defineNuxtConfig({
 })
 ```
 
-See [`unplugin-skills`](https://github.com/Barbapapazes/unplugin-skills/tree/main/packages/unplugin-skills#readme) for skill directory structure and validation rules.
+See [`unplugin-skills`](https://github.com/Barbapapazes/unplugin-skills/tree/main/packages/unplugin-skills#readme) for explicit frontmatter requirements, exclusions, symlink policy, raw `SKILL.md` versus deterministic `.tar.gz` behavior, and digest semantics. The former `/.well-known/skills` endpoint and `files` index field are not supported.
 
 ## Credits
 

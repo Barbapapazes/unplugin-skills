@@ -1,6 +1,8 @@
 # Unplugin Skills
 
-Automatically expose your skills as static assets in your Vite, and Nuxt projects following the [Agent Skills Discovery RFC.](https://github.com/cloudflare/agent-skills-discovery-rfc)
+Expose local skills in Vite and Nuxt projects using [Agent Skills Discovery RFC 0.2](https://github.com/cloudflare/agent-skills-discovery-rfc). Both packages publish `/.well-known/agent-skills/index.json` and deterministic, SHA-256-addressed artifacts.
+
+Skills containing only `SKILL.md` are served as raw Markdown. Skills with supporting files are served as deterministic `.tar.gz` archives with their files at the archive root.
 
 ## Packages
 

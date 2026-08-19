@@ -46,6 +46,7 @@
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
+    "nanotar": "^0.3.0",
     "picocolors": "^1.1.1",
     "unplugin": "^3.3.0"
   },
