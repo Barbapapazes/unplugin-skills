@@ -39,18 +39,18 @@
   },
   "dependencies": {
     "@nuxt/kit": "^4.4.8",
-    "h3": "^1.15.4",
+    "h3": "^2.0.8",
     "nitropack": "^2.13.4",
     "unplugin-skills": "workspace:*"
   },
   "devDependencies": {
     "@nuxt/module-builder": "^1.0.2",
     "@nuxt/test-utils": "^4.0.3",
-    "@types/node": "^24.13.2",
+    "@types/node": "^26.6.6",
     "eslint": "^10.4.1",
     "nuxt": "^4.4.8",
-    "typescript": "~6.0.3",
-    "vitest": "^4.1.8",
+    "typescript": "~7.0.2",
+    "vitest": "^5.0.5",
     "vue-tsc": "^3.3.3"
   }
 }
